@@ -1,0 +1,20 @@
+#!/bin/bash
+
+if [ "${HOSTNAME}" = dc1proseldap03 ];
+then
+   CURRENT_DIR=${PWD}
+   
+   echo "Freshen things up..."
+   cd /home/lowk
+   DATE=`date +"%G%m%d-%T"`
+   ssh cdlproseldap01 "mkdir -p /home/lowk/bin/bak/${DATE}; cp /home/lowk/bin/* /home/lowk/bin/bak/${DATE};"
+   tar -cpf - bin | ssh cdlproseldap01 "tar -xpf - -C /home/lowk"
+   cd /home/lowk/cases
+   ssh cdlproseldap01 "mkdir -p /home/lowk/cases/TEMPLATE/bak/${DATE}; cp /home/lowk/cases/TEMPLATE/* /home/lowk/cases/TEMPLATE/bak/${DATE};"
+   tar -cpf - TEMPLATE | ssh cdlproseldap01 "tar -xpf - -C /home/lowk/cases"
+   
+   cd ${CURRENT_DIR}
+else
+   echo "Only run ${0} from dc1proseldap03"
+   exit
+fi

@@ -1,0 +1,195 @@
+#!/bin/bash
+
+function list_cases(){
+   select DIR in `ls -dtr ${filter} | tail -${PAGE_CASES}`
+   do
+      if [ "${DIR}" == "OLDER" ]
+      then
+         clear
+         echo -e "\t\t\t\tOLDER CASES"
+         older_cases=`ls -dtr ${filter} | head -n -${PAGE_CASES}|wc -l`
+         if [ "${older_cases}" -gt ${PAGE_CASES} ]
+         then
+               break_down_cases
+               select DIR in `ls -dtr ${filter} | sed -n "${p_begin},${p_end}p"`
+               do
+                  CASE=${DIR}
+                  CASE_DIR=${CASES}/${DIR}
+                  break
+               done
+         else
+            select DIR in `ls -dtr ${filter} | head -n -${PAGE_CASES}`
+            do
+               CASE=${DIR}
+               CASE_DIR=${CASES}/${DIR}
+               break
+            done
+         fi
+      else
+         true
+      fi 
+      CASE=${DIR}
+      CASE_DIR=${CASES}/${DIR}
+      break
+   done
+}
+
+function display_batch(){
+   select DATE in "${DATES[@]}"
+   do
+      counter=0
+      while [ "${DATE}" != "${DATES[${counter}]}" ]
+      do
+         counter=$((counter+1))
+      done
+      p_end=${BATCHES[${counter}]}
+      p_begin=$((p_end - PAGE_CASES))
+      if [ "${p_begin}" -lt "1" ]
+      then
+         p_begin=1
+      fi
+      break
+   done
+}
+
+function break_down_cases(){
+   CASES_GROUPED=${PAGE_CASES}
+   counter=0
+   while [ "${older_cases}" -gt "0" ]
+   do
+      BATCHES[counter]="${older_cases}"
+      newest=`ls -dtr ${filter} |  head -n -${CASES_GROUPED} | tail -1`
+      MODDATE=$(stat -c %y "${CASES}/${newest}")
+      DATES[counter]=${MODDATE%% *}
+      counter=$((counter+1))
+      CASES_GROUPED=$((CASES_GROUPED+PAGE_CASES))
+      older_cases=`ls -dtr ${filter} | head -n -${CASES_GROUPED}|wc -l`
+   done
+   display_batch
+}
+
+
+function get_case {
+   echo -e  "\n...beam me up scotty...\n"
+
+   CASES="/home/lowk/cases"
+   num_regx='^[0-9]+$'
+   CURRENT_DIR=${PWD}
+   touch ${CASES}/OLDER
+   filter="*"
+   clear
+
+   if [ "$ARGS" -gt 1 ];
+   then
+      echo -e "\nUsage: ${SCRIPT} CASE_NAME (optional)\n\n"
+      exit 
+   elif [ "$ARGS" -eq 1 ]
+   then
+      if [ $ARG1 == '.' ];
+      then
+#         echo "setting DOT , working in ${CURRENT_DIR}"
+         if [[ ${CURRENT_DIR} =~ ${CASES} ]];
+         then
+#            echo "in good location"
+            ARG1=`echo ${PWD} | awk -F "/" '{print $NF}'`
+#            echo "${ARG1}"
+#            read
+         else
+            echo "Can only CLONE in ${CASES}"
+            exit
+         fi
+      fi
+
+      cd ${CASES}
+
+      if [[ ${ARG1} =~ ${num_regx} ]];
+      then
+         if [ "${ARG1}" -lt 100000 ];
+         then
+            filter="*${ARG1}*"
+            list_cases
+         else
+            CASE=${ARG1}
+            CASE_DIR=${CASES}/${ARG1}
+            if [ -d ${CASE_DIR} ];
+            then
+               echo -e "\n${CASE_DIR}\n"
+            else
+               echo -e "\n\n${CASE_DIR}\tdoes not exist.\nCan only CLONE existing cases.\n\n"
+               exit
+            fi
+         fi
+      else
+         echo "SEARCH"
+         search=${ARG1}
+         if grep -l ${search} ${CASES}/*/servers>/dev/null;
+         then
+            matches=`grep -l ${search} ${CASES}/*/servers | awk -F'/' '{print $5}'`;
+         else
+            echo "No matching CASES in ${CASES}"
+            exit
+         fi
+         select DIR in ${matches};
+         do
+            CASE=${DIR}
+            CASE_DIR=${CASES}/${DIR}
+            break
+         done
+#         echo ${matches}
+      fi
+   else
+      list_cases
+   fi
+}
+
+function set_target
+{
+   #PAGE_CASES=92  # full page
+   #PAGE_CASES=44
+   PAGE_CASES=80
+   CASES="/home/lowk/cases"
+   
+   if [ "${HOSTNAME}" = dc1proseldap03 ];
+   then
+      TARGET="cdlproseldap01"
+   elif [ "${HOSTNAME}" = cdlproseldap01 ];
+   then
+      TARGET="dc1proseldap03 "
+   else
+      echo -e "\nOnly run ${0} from dc1proseldap03 or cdlproseldap01\n\n"
+      exit
+   fi
+}
+
+function backup_dir
+{
+   DATE=`date +"%G%m%d-%T"`
+   BACKUP_DIR="${CASE_DIR}/bak/${DATE}"
+   echo -e "\nCreate ${BACKUP_DIR} on ${TARGET}\n"
+   echo -e "\nCopy ${CASE_DIR} from ${HOSTNAME}\n"
+#   ssh ${TARGET} "mkdir -p ${BACKUP_DIR}; cp ${CASE_DIR}/* ${BACKUP_DIR};"
+   ssh -o LogLevel=error ${TARGET} "mkdir -p ${BACKUP_DIR}; cp ${CASE_DIR}/* ${BACKUP_DIR};"
+}
+
+function CLONE {
+   echo -e "\nCloning...\n"
+   backup_dir
+   echo -e "\nClone ${CASE} in ${CASES} on to  ${TARGET}\n"
+   cd ${CASES}
+#   tar -cpf - ${CASE} | ssh ${TARGET} "tar -xpf - -C ${CASES}"
+   tar -cpf - ${CASE} | ssh -o LogLevel=error ${TARGET} "tar -xpf - -C ${CASES}"
+   echo -e "\n...Complete\n"
+}
+
+ARGS=$#
+SCRIPT=$0
+ARG1=$1
+
+#echo "number = ${ARGS} name = ${SCRIPT} arg1 = ${ARG1}"
+
+CASE=''
+set_target # $TARGET
+get_case # $CASE_DIR
+#cd ${CASE_DIR}
+CLONE
+cd ${CURRENT_DIR}

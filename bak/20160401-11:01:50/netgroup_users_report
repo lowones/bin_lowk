@@ -1,0 +1,89 @@
+#!/usr/bin/perl
+require "/home/lowk/bin/lowlib.pl";
+
+my $os = 'linux';
+my $logins_file = 'logins';
+
+if ($#ARGV == 0)
+{
+   ${os} = shift(@ARGV);
+}
+elsif ($#ARGV == 1)
+{
+   ${os} = shift(@ARGV);
+   ${logins_file} = shift(@ARGV);
+}
+elsif ($#ARGV > 1)
+{
+  print"\nUsage:$0 OS (optional) LOGINS_LIST (optional)\n\n\t\tdefault os - linux\n\t\tdefault  logins file - logins)\n\n";
+   exit();
+}
+
+unless ( ${os} =~ m/linux|solaris|aix/ )
+{
+   print("OS must be linux, solaris or aix\n");
+   exit();
+}
+
+netgroup_report(${os}, ${logins_file});
+
+sub netgroup_report
+{
+   my ($os, $logins_file) = @_;
+   my @logins = read_file(${logins_file});
+   my %netgroups = ();
+   my $logins_count = 0;
+   foreach my $login (@logins)
+   {
+      ($count, %netgroups) = get_netgroups(${os}, ${login}, %netgroups);
+      $logins_count = $logins_count + $count;
+   }
+   output_report(${logins_count}, %netgroups);
+
+   return();
+}
+
+sub output_report
+{
+   my ($count, %netgroups) = @_;
+   print("\nlogins\t${count}\n");
+   my @keys = sort { $netgroups{$b} <=> $netgroups{$a} } keys(%netgroups);
+   foreach my $group (@keys)
+   {
+      printf("\t%-20s\t%s\n", ${group}, $netgroups{$group});
+   }
+   print("\n");
+}
+
+sub get_netgroups
+{
+   my (${os}, ${login}, %netgroups) = @_;
+   my @login_info = `/usr/local/ldap/bin/ldap_user_access.pl ${login} ${os}`;
+   my $count = 0;
+   if ($#login_info < 2)
+   {
+      print("${login}\tNO INFO\n");
+   }
+   else
+   {
+      print("${login}\n");
+      $count=1;
+   }
+   foreach my $line (@login_info)
+   {
+      if ( ${line} =~ m/\s+netgroup\s+(\S+)\s+/ )
+      {
+         my $group = $1;
+         if ( exists($netgroups{$group}) )
+         {
+             $netgroups{$group}++;
+         } 
+         else
+         {
+             $netgroups{$group}=1;
+         }
+      }
+   }
+   return ($count, %netgroups);
+
+}

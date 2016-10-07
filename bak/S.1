@@ -1,0 +1,37 @@
+#!/bin/bash
+
+if [ "$#" -gt 1 ];
+then
+   echo -e "\nUsage: ${0} SERVER_LIST (optional if servers file exists"
+   echo -e "\n\tssh to  servers in SERVER_LIST\n"
+   exit 1
+elif [ "$#" -eq 0 ];
+then
+   echo "${PWD}/servers"
+   if [ -f ${PWD}/servers ];
+   then
+      servers="${PWD}/servers"
+   else
+      echo "No servers file in ${PWD}"
+      exit
+   fi
+else
+
+   servers="${PWD}/${1}"
+
+
+   if [ -f ${servers} ];
+   then
+      echo "${servers}"
+   else
+	echo "${servers} does not exist"
+        exit
+   fi
+
+fi
+
+for server in `cat ${servers}`
+do
+   echo ${server}
+   assh ${server}
+done

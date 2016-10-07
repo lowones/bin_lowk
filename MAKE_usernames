@@ -1,0 +1,43 @@
+#!/bin/bash
+#set -x
+
+if [ "$#" -gt 1 ];
+then
+   echo -e "\nUsage: ${0} USER_LIST (optional if users file exists"
+   echo -e "\n\tgenerate usernames from users in USER_LIST\n"
+   exit 1
+elif [ "$#" -eq 0 ];
+then
+#   echo "${PWD}/users"
+   if [ -f ${PWD}/users ];
+   then
+      users="${PWD}/users"
+   else
+      echo "No users file in ${PWD}"
+      exit
+   fi
+else
+   users="${PWD}/${1}"
+
+
+   if [ -f ${users} ];
+   then
+      echo "${users}"
+   else
+        echo "${users} does not exist"
+        exit
+   fi
+
+fi
+
+
+
+IFS=$'\n'
+for user in `cat ${users}`
+do
+#   echo ${user}
+   first=`echo ${user} | awk '{print $1}'`
+   last=`echo ${user} | awk '{print $2}'`
+   username=`~/lib/make_username.pl ${first} ${last}`
+   echo ${username}
+done

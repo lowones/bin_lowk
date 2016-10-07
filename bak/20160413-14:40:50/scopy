@@ -1,0 +1,96 @@
+#!/usr/bin/perl -w
+use strict;
+require '/home/lowk/bin/lowlib.pl';
+my $HOSTS_FILE	= '/etc/hosts';
+
+unless ( @ARGV	== 2 )	{ die("Must provide source and destination\n"); }
+my ($source, $dest)	= @ARGV;
+if	( (-e $source) and (-e $dest) )
+	{ die("src and dst already exist\n"); }
+unless	( (-r $source) or (-r $dest) )
+	{ die("remote->remote not supported or src and dst not readable\n"); }
+unless ( -r $source )	{ $source	= figure_remote($source); }
+unless ( -r $dest )	{ $dest	= figure_remote($dest); }
+
+`sudo /usr/bin/scp $source $dest`;
+
+sub	figure_remote
+{
+	my $search	= shift(@_);
+	my ($remote_login, $remote_ip, $remote_path)	= ();
+	if ( $search	=~ s/(:.*)$// )
+		{ $remote_path	= $1; }
+	else	{ die("no remote path\n"); }
+	if ( $search	=~ m/^(\w+)\@(.+)/ )
+		{ $remote_login = $1; $search = $2; }
+	my %hosts	= get_hosts($HOSTS_FILE);
+
+	my @matches	= sort( grep { m/$search/ } keys(%hosts));
+	
+	if      ( $#matches     == -1 ) { $remote_ip = $search; }
+	elsif	( $#matches	== 0 )
+		{ $remote_ip	= $hosts{$matches[0]}; }
+	elsif	( $#matches > 0 )
+	{
+		my $choice	= -1;
+		until ( ($choice >= 0) and ( $choice <= $#matches) )
+		{
+			print_matches(@matches);
+			chomp($choice	= <STDIN>);
+			unless ( $choice =~ m/^\d+$/ )	{ $choice	= -1; }
+		}
+		$remote_ip	= $hosts{$matches[$choice]};
+	}
+
+	if ( $remote_login )
+		{ $remote_ip	= $remote_login . '@' . $remote_ip; }
+	$remote_ip .= $remote_path;
+	return($remote_ip);
+}
+
+sub	get_hosts
+{
+	my $hosts_file	= shift(@_);
+	my @hosts	= read_file($hosts_file);
+	my %hosts	= ();
+
+my @files = </usr/local/etc/ldap*.csv>;
+foreach my $file (@files)
+{
+   my @file = read_file(${file});
+   shift(@file);
+   shift(@file);
+   foreach my $line (@file)
+   {
+      (my $hostname, my $app, my $ip) = split(/,/, $line);
+      push @hosts, "$ip\t$hostname";
+   }
+}
+
+
+	LINE:	foreach my $line (@hosts)
+	{
+		$line	=~	s/#.*$//g;
+		if ($line	=~ m/^\s*$/)	{ next LINE; }
+		if ($line	=~ m/^\s*((?:\d{1,3}\.){3}\d{1,3})\s+(.+)/ )
+		{
+			my $ip_address	= $1;
+			my @aliases	= split(/\s+/, $2);
+			foreach my $alias (@aliases)
+				{ $hosts{$alias}	= $ip_address; }
+		}
+	}
+	return(%hosts);
+}
+
+sub	print_matches
+{
+	my @matches	= @_;
+	my $columns	= 3;
+	foreach my $element (0..$#matches)
+	{
+		unless ($element%$columns)	{ printf("\n"); }
+		printf("%2d %16s\t", $element, $matches[$element]);
+	}
+	printf("\n\n Enter # of choice : ");
+}

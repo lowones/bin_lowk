@@ -1,0 +1,68 @@
+#!/usr/bin/perl -w
+use strict;
+require '/home/lowk/bin/lowlib.pl';
+
+my $search = shift;
+
+my ($title, $session) = ();
+
+my @screen_out = `screen -ls`;
+
+# Remove first and last two output line
+shift(@screen_out);
+pop(@screen_out);
+pop(@screen_out);
+
+my (@matches, %screens) = ();
+
+foreach my $line (@screen_out)
+{
+   if ( $line =~ m/(\d+\.(\S+))/ )
+   {
+      $screens{$2} = $1;
+   }
+}
+
+if ( defined($search) )
+{ @matches = sort( grep { m/$search/ } keys(%screens)); }
+else { @matches = keys(%screens); }
+
+if ( $#matches == -1 )
+{
+   $title = $search;
+   printf("\033]0;[ $title ]\007");
+   exec("screen -h 1000 -S $title -t $title");
+}
+elsif ( $#matches == 0 )
+{
+   $title = $matches[0];
+   $session = $screens{$title};
+}
+elsif ( $#matches > 0 )
+{
+   my $choice      = -1;
+   until ( ($choice >= 0) and ( $choice <= $#matches) )
+   {
+      print_matches(@matches);
+      chomp($choice   = <STDIN>);
+      unless ( $choice =~ m/^\d+$/ )  { $choice       = -1; }
+   }
+   $title = $matches[$choice];
+   $session = $screens{$title};
+}
+printf("\033]0;[ $title ]\007");
+#exec("screen -dr $session"); # dettach and reattach
+exec("screen -x $session");	
+
+sub print_matches
+{
+   my @matches     = @_;
+   my $columns     = 3;
+   foreach my $element (0..$#matches)
+   {
+      unless ($element%$columns)      { printf("\n"); }
+      printf("%2d %16s\t", $element, $matches[$element]);
+   }
+   printf("\n\n Enter # of choice : ");
+}
+

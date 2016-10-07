@@ -1,0 +1,51 @@
+#!/bin/bash
+
+if [ "$#" -gt 2 ];
+then
+   echo -e "\nUsage: ${0} REMOTE_FILE SERVER_LIST (optional if servers file exists"
+   echo -e "\n\tls -ld REMOTE_FILE on  servers in SERVER_LIST\n"
+   exit 1
+elif [ "$#" -eq 0 ];
+then
+   echo -e "\n Must specify REMOTE_FILE\n"
+   echo -e "\nUsage: ${0} REMOTE_FILE SERVER_LIST (optional if servers file exists"
+   echo -e "\n\tls -ld REMOTE_FILE on  servers in SERVER_LIST\n"
+   exit 1
+elif [ "$#" -eq 1 ];
+then
+   echo "${PWD}/servers"
+   if [ -f ${PWD}/servers ];
+   then
+      servers="${PWD}/servers"
+   else
+      echo "No servers file in ${PWD}"
+      exit
+   fi
+else
+
+   servers="${PWD}/${2}"
+
+
+   if [ -f ${servers} ];
+   then
+      echo "${servers}"
+   else
+	echo "${servers} does not exist"
+        exit
+   fi
+
+fi
+
+REMOTE_FILE=${1}
+if [[ "${REMOTE_FILE}" =~ .*\;.* ]];
+then
+   echo "Illegal Character in ${REMOTE_FILE}"
+   exit
+fi
+
+
+for server in `cat ${servers}`
+do
+   echo ${server}
+   assh ${server} "ls -ld ${REMOTE_FILE};"
+done

@@ -1,0 +1,207 @@
+#!/usr/bin/perl
+require "/home/lowk/bin/lowlib.pl";
+
+my $os = 'linux';
+my $email_file = 'emails';
+my $servers_file = 'servers';
+
+if ($#ARGV == 0)
+{
+   ${os} = shift(@ARGV);
+}
+elsif ($#ARGV == 1)
+{
+   ${os} = shift(@ARGV);
+   ${servers_file} = shift(@ARGV);
+}
+elsif ($#ARGV > 1)
+{
+  print"\nUsage:$0 OS (optional) EMAIL_LIST (optional)\n\n\t\tdefault os - linux\n\t\tdefault  servers file - servers)\n\n";
+   exit();
+}
+
+unless ( ${os} =~ m/linux|solaris|aix/ )
+{
+   print("OS must be linux, solaris or aix\n");
+   exit();
+}
+
+netgroup_report(${os}, ${servers_file});
+
+sub netgroup_report
+{
+   my ($os, $server_file) = @_;
+   my @servers = read_file(${servers_file});
+   my %netgroups = ();
+   my $servers_count = 0;
+   foreach my $server (@servers)
+   {
+      ($count, %netgroups) = get_netgroups(${os}, ${server}, %netgroups);
+      $servers_count = $servers_count + $count;
+   }
+#   my $servers_count = ($#servers + 1);
+   output_report(${servers_count}, %netgroups);
+
+   return();
+}
+
+sub output_report
+{
+   my ($count, %netgroups) = @_;
+   print("servers\t${count}\n");
+   my @keys = sort { $netgroups{$b} <=> $netgroups{$a} } keys(%netgroups);
+#   foreach my $group (keys %netgroups)
+   foreach my $group (@keys)
+   {
+      printf("\t%-20s\t%s\n", ${group}, $netgroups{$group});
+   }
+}
+
+sub get_netgroups
+{
+   my (${os}, ${server}, %netgroups) = @_;
+   my @server_info = `/usr/local/ldap/bin/ldap_host_query.pl ${server} ${os}`;
+   my $count = 0;
+   if ($#server_info < 2)
+   {
+      print("${server}\tNO INFO\n");
+   }
+   else
+   {
+      print("${server}\n");
+      $count=1;
+   }
+   my $ng = 0;
+   foreach my $line (@server_info)
+   {
+      if (${ng})
+      {
+         if ( ${line} =~ m/^\s+(\S+)/ )
+         {
+            my $group = $1;
+            if ( exists($netgroups{$group}) )
+            {
+                $netgroups{$group}++;
+            } 
+            else
+            {
+                $netgroups{$group}=1;
+            }
+         }
+      }
+      elsif ( ${line} =~ m/^memberNisNetgroup:\s+(\S+)/ )
+      {
+         ${ng} = 1;
+         my $group = $1;
+         if ( exists($netgroups{$group}) )
+         {
+             $netgroups{$group}++;
+         } 
+         else
+         {
+             $netgroups{$group}=1;
+         }
+      }
+   }
+   return ($count, %netgroups);
+
+}
+
+sub find_email
+{
+   my $email = shift(@_);
+   my @users = @_;
+   my $found = 0;
+   foreach my $line (@{users} )
+   {
+      if ( ${line} =~ m/ uid:\s+(\S+)/ )
+      {
+         $login=$1;
+      }
+      if ( ${line} =~ m/${email}/i )
+      {
+         $matched_login=${login};
+         $found++;
+      }
+   }
+   return(${found}, ${matched_login});
+}
+
+sub translate_email
+{
+   my $email = shift(@_);
+   my @email = split(//,$email);
+   for ( my $i = 0; ${i} <= $#email; $i++)
+   {
+#      print("$email[$i]\n");
+      if ( $email[$i] eq "_" )
+      {
+         $email[$i]='.';
+      }
+      elsif ( $email[$i] eq "@" )
+      {
+         break;
+      }
+   }
+   my $email = join(//, @email);
+   return $email;
+}
+
+sub search_login()
+{
+   my $email = shift(@_);
+   my @users = @_;
+   $email = translate_email(${email});
+   my ($found, $login) = find_email(${email},@users);
+   if (${found} == 0)
+   {
+      printf("%-40s NOT FOUND\n", ${email});
+   }
+   elsif (${found} > 1)
+   {
+      printf("%-40s DUPLICATES FOUND\n", ${email});
+   }
+   else
+   {
+      print("${login}\n");
+   }
+}
+
+sub parse_account
+{
+   my ($user_info) = @{_};
+   my (${address},${gid},${ticket}) = ();
+   my ${user_regex} = qr/^([^,]+),(\d+),(\d{6,})$/;
+   if ( ${user_info} =~ ${user_regex} )
+   {
+      ${address}=$1;
+      ${gid}=$2;
+      ${ticket}=$3;
+      return(${address},${gid},${ticket});
+   }
+   else
+   {
+      printf("Invalid user_line:\t%s\n", ${user_info});
+   }
+}
+
+sub parse_names
+{
+   my ($address) = @{_};
+   my $email_regex = qr/^(\w+)(\.\w+){1,}(-contractor)?\@adp\.com$/;
+   if ( ${address} =~ ${email_regex} )
+   {
+      my ${first_name} = $1;
+      my ${last_name} = $2;
+      if ( ${last_name} =~ /^\.(\w+)$/ )
+      {
+         ${last_name}=$1;
+      }
+      return(${first_name},${last_name});
+   }
+   else
+   {
+      printf("NOT ADP\t%s\n", ${address});
+   }
+   print"\n";
+}	# End parse_names

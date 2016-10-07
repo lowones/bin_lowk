@@ -1,0 +1,107 @@
+#!/usr/bin/perl
+require "/home/lowk/bin/lowlib.pl";
+
+my $os = 'linux';
+my $email_file = 'emails';
+my $servers_file = 'servers';
+
+if ($#ARGV == 0)
+{
+   ${os} = shift(@ARGV);
+}
+elsif ($#ARGV == 1)
+{
+   ${os} = shift(@ARGV);
+   ${servers_file} = shift(@ARGV);
+}
+elsif ($#ARGV > 1)
+{
+  print"\nUsage:$0 OS (optional) EMAIL_LIST (optional)\n\n\t\tdefault os - linux\n\t\tdefault  servers file - servers)\n\n";
+   exit();
+}
+
+unless ( ${os} =~ m/linux|solaris|aix/ )
+{
+   print("OS must be linux, solaris or aix\n");
+   exit();
+}
+
+netgroup_report(${os}, ${servers_file});
+
+sub netgroup_report
+{
+   my ($os, $server_file) = @_;
+   my @servers = read_file(${servers_file});
+   my %netgroups = ();
+   my $servers_count = 0;
+   foreach my $server (@servers)
+   {
+      ($count, %netgroups) = get_netgroups(${os}, ${server}, %netgroups);
+      $servers_count = $servers_count + $count;
+   }
+   output_report(${servers_count}, %netgroups);
+
+   return();
+}
+
+sub output_report
+{
+   my ($count, %netgroups) = @_;
+   print("\nservers\t${count}\n");
+   my @keys = sort { $netgroups{$b} <=> $netgroups{$a} } keys(%netgroups);
+   foreach my $group (@keys)
+   {
+      printf("\t%-20s\t%s\n", ${group}, $netgroups{$group});
+   }
+   print("\n");
+}
+
+sub get_netgroups
+{
+   my (${os}, ${server}, %netgroups) = @_;
+   my @server_info = `/usr/local/ldap/bin/ldap_host_query.pl ${server} ${os}`;
+   my $count = 0;
+   if ($#server_info < 2)
+   {
+      print("${server}\tNO INFO\n");
+   }
+   else
+   {
+      print("${server}\n");
+      $count=1;
+   }
+   my $ng = 0;
+   foreach my $line (@server_info)
+   {
+      if (${ng})
+      {
+         if ( ${line} =~ m/^\s+(\S+)/ )
+         {
+            my $group = $1;
+            if ( exists($netgroups{$group}) )
+            {
+                $netgroups{$group}++;
+            } 
+            else
+            {
+                $netgroups{$group}=1;
+            }
+         }
+      }
+      elsif ( ${line} =~ m/^memberNisNetgroup:\s+(\S+)/ )
+      {
+         ${ng} = 1;
+         my $group = $1;
+         if ( exists($netgroups{$group}) )
+         {
+             $netgroups{$group}++;
+         } 
+         else
+         {
+             $netgroups{$group}=1;
+         }
+      }
+   }
+   return ($count, %netgroups);
+
+}

@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ "$#" -ne 1 ];
+then
+   echo -e "\nUsage: ${0} SERVER_LIST"
+   echo -e "\n\tssh to  servers in SERVER_LIST\n"
+   exit 1
+fi
+
+servers="${PWD}/${1}"
+
+echo "${servers}"
+
+
+
+if [ -f ${servers} ];
+then
+	for server in `cat ${servers}`
+	do
+		echo ${server}
+		assh ${server}
+	done
+else
+	echo "${servers} does not exist"
+fi

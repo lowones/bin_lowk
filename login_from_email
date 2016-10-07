@@ -1,0 +1,136 @@
+#!/usr/bin/perl
+require "/home/lowk/bin/lowlib.pl";
+
+my $os = 'linux';
+my $email_file = 'emails';
+
+if ($#ARGV == 0)
+{
+   ${os} = shift(@ARGV);
+}
+elsif ($#ARGV == 1)
+{
+   ${os} = shift(@ARGV);
+   ${email_file} = shift(@ARGV);
+}
+elsif ($#ARGV > 1)
+{
+  print"\nUsage:$0 OS (optional) EMAIL_LIST (optional)\n\n\t\tdefault os - linux\n\t\tdefault  email file - emails)\n\n";
+   exit();
+}
+
+unless ( ${os} =~ m/linux|solaris|aix/ )
+{
+   print("OS must be linux, solaris or aix\n");
+   exit();
+}
+
+
+my @users = `/usr/local/ldap/bin/ldap_user_query.pl \\* ${os}`;
+
+my @email_info = read_file($email_file);
+foreach my $email_line ( @{email_info} )
+{
+   chomp(${email_line});
+   search_login(${email_line},@users);
+}
+
+sub find_email
+{
+   my $email = shift(@_);
+   my @users = @_;
+   my $found = 0;
+   foreach my $line (@{users} )
+   {
+      if ( ${line} =~ m/ uid:\s+(\S+)/ )
+      {
+         $login=$1;
+      }
+      if ( ${line} =~ m/${email}/i )
+      {
+         $matched_login=${login};
+         $found++;
+      }
+   }
+   return(${found}, ${matched_login});
+}
+
+sub translate_email
+{
+   my $email = shift(@_);
+   $email = trim(${email});
+   my @email = split(//,$email);
+   for ( my $i = 0; ${i} <= $#email; $i++)
+   {
+#      print("$email[$i]\n");
+      if ( $email[$i] eq "_" )
+      {
+         $email[$i]='.';
+      }
+      elsif ( $email[$i] eq "@" )
+      {
+         break;
+      }
+   }
+   my $email = join(//, @email);
+   return $email;
+}
+
+sub search_login()
+{
+   my $email = shift(@_);
+   my @users = @_;
+   $email = translate_email(${email});
+   my ($found, $login) = find_email(${email},@users);
+   if (${found} == 0)
+   {
+      printf("%-40s NOT FOUND\n", ${email});
+   }
+   elsif (${found} > 1)
+   {
+      printf("%-40s DUPLICATES FOUND\n", ${email});
+   }
+   else
+   {
+      print("${login}\n");
+   }
+}
+
+sub parse_account
+{
+   my ($user_info) = @{_};
+   my (${address},${gid},${ticket}) = ();
+   my ${user_regex} = qr/^([^,]+),(\d+),(\d{6,})$/;
+   if ( ${user_info} =~ ${user_regex} )
+   {
+      ${address}=$1;
+      ${gid}=$2;
+      ${ticket}=$3;
+      return(${address},${gid},${ticket});
+   }
+   else
+   {
+      printf("Invalid user_line:\t%s\n", ${user_info});
+   }
+}
+
+sub parse_names
+{
+   my ($address) = @{_};
+   my $email_regex = qr/^(\w+)(\.\w+){1,}(-contractor)?\@adp\.com$/;
+   if ( ${address} =~ ${email_regex} )
+   {
+      my ${first_name} = $1;
+      my ${last_name} = $2;
+      if ( ${last_name} =~ /^\.(\w+)$/ )
+      {
+         ${last_name}=$1;
+      }
+      return(${first_name},${last_name});
+   }
+   else
+   {
+      printf("NOT ADP\t%s\n", ${address});
+   }
+   print"\n";
+}	# End parse_names
